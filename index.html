@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f0f17">
+<title>Macro</title>
+<link rel="icon" type="image/png" href="whale-icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="tokens.css?v=1.0">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);font-weight:360;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5;transition:background var(--dur) ease-out,color var(--dur) ease-out}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+button{font-family:inherit}
+
+/* TOPBAR (kept solid on purpose, no backdrop-filter, which would create a
+   stacking context and paint over dropdowns. See CLAUDE.md gotchas.) */
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;height:calc(56px + env(safe-area-inset-top));padding:env(safe-area-inset-top) max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left));position:sticky;top:0;z-index:100}
+.logo{font-weight:700;font-size:15px;letter-spacing:-.01em;display:flex;align-items:center;gap:9px;cursor:pointer;color:var(--text);background:none;border:none}
+.logo-mark{height:26px;width:26px;flex-shrink:0}
+.logo-name{background:linear-gradient(135deg,var(--accent),var(--grad-2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.spacer{flex:1}
+.ver{font-size:11px;color:var(--text3);font-variant-numeric:tabular-nums;padding:3px 8px;border:1px solid var(--border);border-radius:999px;white-space:nowrap}
+.sync{font-size:12px;white-space:nowrap;min-width:64px;text-align:right;font-variant-numeric:tabular-nums}
+.icon-btn{width:32px;height:32px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg3);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2);transition:background var(--dur) ease-out,color var(--dur) ease-out,transform var(--dur) var(--spring);flex-shrink:0;font-size:15px}
+.icon-btn:hover{background:var(--bg4);color:var(--text)}
+.icon-btn:active{transform:scale(.92)}
+
+/* AUTH badge (hidden unless SB_AUTH is on, see renderAuthUI) */
+.auth-badge{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)}
+.auth-badge.hidden{display:none}
+.auth-email{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+
+/* MAIN */
+.main{padding:20px;max-width:1200px;margin:0 auto}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-1)}
+.card-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.card-head h2{font-size:15px;font-weight:640;letter-spacing:-.01em}
+.card-body{padding:14px 16px}
+
+/* INPUTS + BUTTONS */
+input,select,textarea{font-family:inherit;font-size:13px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--radius);padding:9px 11px;outline:none;transition:border-color var(--dur) ease-out}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+input.invalid,select.invalid{border-color:var(--red)}
+.btn{padding:9px 16px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg3);color:var(--text);cursor:pointer;font-size:13px;font-weight:500;transition:background var(--dur) ease-out,border-color var(--dur) ease-out,transform var(--dur) var(--spring);white-space:nowrap}
+.btn:hover{background:var(--bg4)}
+.btn:active{transform:scale(.96)}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--grad-2));border-color:transparent;color:var(--onacc);font-weight:600}
+.btn-primary:hover{filter:brightness(1.06)}
+
+/* DASHBOARD (M2), asset-class sections each in a .card, a responsive grid of
+   instrument cards inside. See the RENDER block in the script for the single
+   computing functions (changeAbs/changePct/direction/dayRangePos) every card
+   reads, so no view can ever show a stale derived number. */
+.dash{display:flex;flex-direction:column;gap:20px}
+.mkt-count{font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums}
+.mkt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.instr-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.instr-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;min-width:0}
+.instr-sym{font-weight:640;font-size:13px;letter-spacing:-.01em;flex-shrink:0}
+.instr-name{font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+.instr-price{font-size:19px;font-weight:640;font-variant-numeric:tabular-nums}
+/* Direction is never colour alone: every state below pairs an arrow glyph,
+   an explicit +/- text sign, AND a colour. */
+.instr-change{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.instr-change.up{color:var(--green)}
+.instr-change.down{color:var(--red)}
+.instr-change.flat{color:var(--text3)}
+.instr-range{display:flex;justify-content:space-between;font-size:10px;color:var(--text3);font-variant-numeric:tabular-nums}
+.instr-spark{width:100%;height:34px;display:block}
+.instr-spark polyline{stroke:var(--text3)}
+.instr-spark.up polyline{stroke:var(--green)}
+.instr-spark.down polyline{stroke:var(--red)}
+
+/* STATE PANELS (empty / error / loading) */
+@keyframes state-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.state{padding:56px 20px;text-align:center;color:var(--text2);animation:state-in var(--dur) var(--spring)}
+.state h3{font-size:16px;color:var(--text);margin-bottom:6px;font-weight:680;letter-spacing:-.01em}
+.state p{font-size:13px;max-width:340px;margin:0 auto 14px}
+.state.error{color:var(--red)}
+.state-scene{margin:0 auto 14px;display:block}
+.state-scene .ss-a{fill:var(--accent);opacity:.22}
+.state-scene .ss-b{fill:var(--grad-2);opacity:.22}
+.state-scene .ss-c{fill:var(--pop);opacity:.32}
+.state.error .state-scene .ss-a,.state.error .state-scene .ss-b{fill:var(--red);opacity:.16}
+.state.error .state-scene .ss-c{fill:var(--red);opacity:.26}
+.spinner{width:32px;height:32px;margin:0 auto 14px;border-radius:50%;border:3px solid var(--accent-soft);border-top-color:var(--accent);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hidden{display:none!important}
+
+/* MODAL (mount point kept for M3's watchlist add/edit, unused in M0-M2) */
+@keyframes modal-in{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+.overlay{position:fixed;inset:0;background:rgba(10,8,20,.6);display:flex;align-items:center;justify-content:center;padding:16px;z-index:200}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius-lg);width:100%;max-width:440px;max-height:90vh;overflow:auto;box-shadow:var(--shadow-2);animation:modal-in var(--dur) var(--spring)}
+.modal-head{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.modal-head h3{font-size:15px;font-weight:640;letter-spacing:-.01em}
+.modal-body{padding:16px;display:flex;flex-direction:column;gap:14px}
+.modal-foot{padding:14px 16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:12px;color:var(--text2);font-weight:500}
+.field .req{color:var(--red)}
+.field .err{font-size:11px;color:var(--red);min-height:14px}
+
+/* TOAST */
+@keyframes toast-in{from{opacity:0;transform:translateY(10px) scale(.95)}to{opacity:1;transform:none}}
+#toasts{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:300;width:max-content;max-width:90vw}
+.toast{background:var(--bg4);border:1px solid var(--border2);color:var(--text);padding:10px 16px;border-radius:var(--radius);font-size:13px;box-shadow:var(--shadow-2);animation:toast-in var(--dur) var(--spring)}
+.toast.err{background:var(--red-soft);border-color:var(--red);color:var(--red)}
+
+/* MOBILE, keep these rules AFTER the base rules above. A later equal-specificity
+   base rule beats an earlier @media rule of equal specificity. See CLAUDE.md. */
+@media(max-width:640px){
+  .main{padding:12px}
+  .logo-name{display:none}
+  .ver{display:none}
+  .auth-email{display:none}
+  .mkt-grid{grid-template-columns:1fr}
+  .instr-name{max-width:55%}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="logo" onclick="location.reload()">
+    <svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--accent)"/><stop offset="1" stop-color="var(--grad-2)"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#lg)"/><circle cx="12" cy="18" r="2.2" fill="#fff" opacity=".95"/><circle cx="19.5" cy="11.5" r="3.2" fill="#fff" opacity=".95"/><circle cx="21.5" cy="20" r="1.5" fill="#fff" opacity=".85"/></svg>
+    <span class="logo-name" id="app-name">Macro</span>
+  </div>
+  <div class="spacer"></div>
+  <span class="sync" id="sync"></span>
+  <span class="ver" id="ver"></span>
+  <span class="auth-badge hidden" id="auth-badge"></span>
+  <button class="icon-btn" id="theme-btn" title="Toggle theme" onclick="toggleTheme()">◐</button>
+</header>
+
+<main class="main">
+  <!-- loading state -->
+  <div id="loading" class="state"><div class="spinner" aria-hidden="true"></div><p>Loading market data</p></div>
+
+  <!-- error state: cloud unreachable (dormant, no Supabase configured yet) OR
+       the mock engine failed to generate. Never fabricate a dashboard on
+       broken data, show this instead. -->
+  <div id="error" class="state error hidden">
+    <svg class="state-scene" viewBox="0 0 120 90" width="100" aria-hidden="true"><circle class="ss-a" cx="30" cy="60" r="22"/><rect class="ss-b" x="55" y="18" width="46" height="46" rx="14"/><circle class="ss-c" cx="94" cy="66" r="10"/></svg>
+    <h3>Could not load the dashboard</h3>
+    <p>Something went wrong building the market data. Check the console and try again.</p>
+    <button class="btn" onclick="boot()">Retry</button>
+  </div>
+
+  <!-- empty state: defensive only, the mock engine always returns instruments
+       today, this covers a future config mistake (e.g. an emptied list). -->
+  <div id="empty" class="state hidden">
+    <svg class="state-scene" viewBox="0 0 120 90" width="100" aria-hidden="true"><circle class="ss-a" cx="30" cy="60" r="22"/><rect class="ss-b" x="55" y="18" width="46" height="46" rx="14"/><circle class="ss-c" cx="94" cy="66" r="10"/></svg>
+    <h3>No market data</h3>
+    <p>The mock engine did not return any instruments.</p>
+    <button class="btn btn-primary" onclick="boot()">Reload</button>
+  </div>
+
+  <!-- dashboard: one card per asset class, a responsive grid of instrument
+       cards inside each -->
+  <div id="dashboard" class="dash hidden">
+    <div class="card">
+      <div class="card-head"><h2>Indices</h2><span class="mkt-count" id="count-indices"></span></div>
+      <div class="card-body"><div class="mkt-grid" id="grid-indices"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Forex</h2><span class="mkt-count" id="count-forex"></span></div>
+      <div class="card-body"><div class="mkt-grid" id="grid-forex"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Commodities</h2><span class="mkt-count" id="count-commodities"></span></div>
+      <div class="card-body"><div class="mkt-grid" id="grid-commodities"></div></div>
+    </div>
+  </div>
+</main>
+
+<div id="toasts"></div>
+<div id="modal-root"></div>
+
+<!-- Shared Kujira engines. Vendored copies, loaded before the app script.
+     Configure them, do not fork. kjr-calendar.js and kjr-sortable.js are
+     vendored in lib/ too (per the starter's standard set) but not loaded
+     here, M0-M2 has no date or drag-reorder UI yet. -->
+<script src="lib/kjr-format.js?v=1.0"></script>
+
+<script>
+/* ============================================================================
+   APP CONFIG, edit this block per project, then the rest follows.
+   Add a table: list it in TABLES and add a matching block to schema.sql.
+   ========================================================================== */
+const APP = {
+  name: 'Macro',
+  storageKey: 'kjr-macro',     // localStorage key (bump the suffix on a breaking schema change)
+  version: 'v1.0 (28 Jul)',    // build badge, bump on every ship
+};
+
+// Every table the app owns. The whole sync layer is driven by this list, so
+// adding a table here (and to schema.sql) is all it takes to make it sync.
+// 'watchlist' is wired at the data layer now (M0) so the sync machinery below
+// already treats it as a real table, sync itself is inert with an empty
+// Supabase URL. M3 builds the actual add/edit/reorder UI on top of this.
+const TABLES = ['watchlist'];
+
+/* ============================================================================
+   SUPABASE CONFIG
+   Leave SB_URL empty to run fully local (localStorage only). Fill it in to sync.
+   Two paths, chosen by USE_WORKER_DB:
+     false, talk to Supabase directly with the anon key (quick, single-user).
+     true,  route every call through a Cloudflare Worker that injects the
+            service-role key server-side, so the browser carries no DB key and
+            RLS can deny anon. Flip to true only after the Worker is deployed.
+   See schema.sql for the matching tables and Row-Level Security policies.
+   No Supabase project exists for Macro yet, this stays empty until M3+.
+
+   SB_AUTH turns on optional per-user sign-in (schema.sql Option C):
+     false        no auth, anon key only (default, zero setup, matches A/B).
+     'email-otp'  Supabase email one-time-code sign-in. Needs SB_DIRECT_URL and
+                  SB_ANON_KEY set (auth always talks to Supabase directly, the
+                  anon key is public by design, there is nothing for the Worker
+                  proxy to hide here). See CLAUDE.md, Auth.
+   ========================================================================== */
+const USE_WORKER_DB  = false;
+const SB_DIRECT_URL  = '';   // e.g. 'https://xxxx.supabase.co'
+const SB_PROXY_URL   = '';   // e.g. 'https://your-worker.workers.dev/db'
+const SB_ANON_KEY    = '';   // anon key, only used on the direct path
+const SB_AUTH        = false;   // false | 'email-otp'
+
+const SB_URL = USE_WORKER_DB ? SB_PROXY_URL : SB_DIRECT_URL;
+const SB_HDR = USE_WORKER_DB
+  ? { 'Content-Type':'application/json' }
+  : { 'Content-Type':'application/json', 'apikey':SB_ANON_KEY, 'Authorization':'Bearer '+SB_ANON_KEY };
+function sbConfigured(){ return !!SB_URL && (USE_WORKER_DB || !!SB_ANON_KEY); }
+
+/* ============================================================================
+   STATE
+   ========================================================================== */
+const DB = {};
+TABLES.forEach(t => DB[t] = []);
+const T = TABLES[0];                       // the single table this app owns so far (watchlist, no UI yet)
+let _cloudReachable = true;
+
+const VKEY      = APP.storageKey + '_v';
+const DIRTY_KEY = APP.storageKey + '_dirty';
+const PDEL_KEY  = APP.storageKey + '_pendingdel';
+
+/* ============================================================================
+   PREVIEW GUARD
+   A local preview (file:// or localhost) must NEVER write to production data.
+   Every cloud write checks this first. See lessons in CLAUDE.md.
+   ========================================================================== */
+function isLocalhostPreview(){
+  try{
+    if (location.protocol === 'file:') return true;
+    const h = location.hostname || '';
+    return h==='localhost' || h==='127.0.0.1' || h==='0.0.0.0' || h==='::1' || /\.local$/.test(h);
+  }catch(e){ return false; }
+}
+
+/* ============================================================================
+   DIRTY TRACKING  (which rows changed since the last successful upload)
+   Persisted to localStorage so a failed or interrupted sync is not lost when
+   the tab closes.
+   ========================================================================== */
+const _dirty = {};
+TABLES.forEach(t => _dirty[t] = new Set());
+function _loadDirty(){
+  try{ const o = JSON.parse(localStorage.getItem(DIRTY_KEY) || '{}'); TABLES.forEach(t => _dirty[t] = new Set(o[t] || [])); }
+  catch(e){}
+}
+function _persistDirty(){
+  try{ const o = {}; TABLES.forEach(t => o[t] = [..._dirty[t]]); localStorage.setItem(DIRTY_KEY, JSON.stringify(o)); }
+  catch(e){}
+}
+function markDirty(table, id){ if (_dirty[table]){ _dirty[table].add(id); _persistDirty(); } }
+
+/* ============================================================================
+   SYNC INDICATOR
+   ========================================================================== */
+let _syncState = 'idle';
+function setSync(s, msg){
+  _syncState = s;
+  const el = document.getElementById('sync'); if (!el) return;
+  if (s==='saving'){ el.textContent='⟳ Syncing'; el.style.color='var(--text3)'; }
+  else if (s==='ok'){ el.textContent='✓ Synced'; el.style.color='var(--green)'; setTimeout(()=>{ if(_syncState==='ok') el.textContent=''; }, 2500); }
+  else if (s==='error'){ el.textContent='⚠ Offline'; el.style.color='var(--red)'; if (msg) console.warn('Sync:', msg); }
+  else if (s==='preview'){ el.textContent='● Preview'; el.style.color='var(--amber)'; }
+  else if (s==='signedout'){ el.textContent='○ Sign in to sync'; el.style.color='var(--text3)'; }
+  else { el.textContent=''; }
+}
+
+/* ============================================================================
+   AUTH  (optional, Supabase email one-time-code, see schema.sql Option C)
+   Off by default (SB_AUTH = false), the anon key keeps working exactly as
+   before and nothing below ever runs. Signed out with auth ON, the app stays
+   fully usable locally and sync is paused, visibly (setSync('signedout')),
+   with a Sign in action in the topbar. Tokens live in localStorage namespaced
+   under APP.storageKey, never in the URL. The preview guard gates every
+   network call here too, same as the data sb* functions.
+   ========================================================================== */
+function authActive(){ return SB_AUTH === 'email-otp' && !!SB_DIRECT_URL && !!SB_ANON_KEY; }
+const AUTH_KEY = APP.storageKey + '_auth';
+let _auth = null;
+function _loadAuth(){ try{ return JSON.parse(localStorage.getItem(AUTH_KEY) || 'null'); }catch(e){ return null; } }
+function _saveAuth(a){ _auth = a; try{ localStorage.setItem(AUTH_KEY, JSON.stringify(a)); }catch(e){} }
+function _clearAuth(){ _auth = null; try{ localStorage.removeItem(AUTH_KEY); }catch(e){} }
+function isSignedIn(){ return authActive() && !!(_auth && _auth.access_token); }
+
+// Headers for a data call: apikey is always the anon key, Authorization swaps
+// to the user's JWT once signed in.
+function sbHeaders(){
+  if (!USE_WORKER_DB && isSignedIn()) return { ...SB_HDR, 'Authorization':'Bearer '+_auth.access_token };
+  return SB_HDR;
+}
+
+// Session expired and could not be refreshed: drop it and surface a designed,
+// visible signed-out state. The app keeps working locally either way.
+function _authExpire(){
+  _clearAuth();
+  setSync('signedout');
+  renderAuthUI();
+}
+
+// One shared request path for every data call, so the 401-refresh-retry logic
+// lives in exactly one place. A failed refresh does not retry a second time.
+async function sbRequest(url, opts){
+  if (isLocalhostPreview()) throw new Error('Blocked: local preview must never call the network.');
+  opts = opts || {};
+  const doFetch = () => fetch(url, { method: opts.method, body: opts.body, headers: { ...sbHeaders(), ...(opts.extraHeaders||{}) } });
+  let r = await doFetch();
+  if (r.status === 401 && isSignedIn()){
+    const ok = await _authRefresh();
+    if (ok) r = await doFetch(); else _authExpire();
+  }
+  return r;
+}
+
+async function _authRefresh(){
+  if (isLocalhostPreview() || !_auth || !_auth.refresh_token) return false;
+  try{
+    const r = await fetch(SB_DIRECT_URL + '/auth/v1/token?grant_type=refresh_token', {
+      method:'POST', headers:{ 'Content-Type':'application/json', 'apikey':SB_ANON_KEY },
+      body:JSON.stringify({ refresh_token:_auth.refresh_token })
+    });
+    if (!r.ok) return false;
+    const j = await r.json();
+    _saveAuth({ access_token:j.access_token, refresh_token:j.refresh_token, expires_at:Date.now() + (j.expires_in||3600)*1000, email:_auth.email });
+    return true;
+  }catch(e){ return false; }
+}
+
+async function authRequestOtp(email){
+  if (isLocalhostPreview()) throw new Error('Sign-in is disabled in local preview.');
+  const r = await fetch(SB_DIRECT_URL + '/auth/v1/otp', {
+    method:'POST', headers:{ 'Content-Type':'application/json', 'apikey':SB_ANON_KEY },
+    body:JSON.stringify({ email, create_user:true })
+  });
+  if (!r.ok){ const j = await r.json().catch(()=>({})); throw new Error(j.msg || j.error_description || 'Could not send the code'); }
+}
+async function authVerifyOtp(email, token){
+  if (isLocalhostPreview()) throw new Error('Sign-in is disabled in local preview.');
+  const r = await fetch(SB_DIRECT_URL + '/auth/v1/verify', {
+    method:'POST', headers:{ 'Content-Type':'application/json', 'apikey':SB_ANON_KEY },
+    body:JSON.stringify({ type:'email', email, token })
+  });
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(j.msg || j.error_description || 'Wrong or expired code');
+  _saveAuth({ access_token:j.access_token, refresh_token:j.refresh_token, expires_at:Date.now() + (j.expires_in||3600)*1000, email });
+}
+function authSignOut(){
+  _clearAuth();               // tokens only, local data is untouched
+  setSync('signedout');
+  renderAuthUI();
+  toast('Signed out');
+}
+
+function renderAuthUI(){
+  const el = document.getElementById('auth-badge');
+  if (!el) return;
+  if (!authActive()){ el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  el.innerHTML = isSignedIn()
+    ? `<span class="auth-email">${escapeHtml(_auth.email||'')}</span><button class="btn" onclick="authSignOut()">Sign out</button>`
+    : `<button class="btn btn-primary" onclick="openAuthModal()">Sign in</button>`;
+}
+
+/* Sign-in modal: email step, then 6-digit code step. Wrong code or a network
+   error shows a field-level error in the modal, not just a toast. Dormant
+   while SB_AUTH is false (the Macro default), kept for when M3+ turns it on. */
+let _authStep = 'email';
+let _authEmail = '';
+function openAuthModal(){ _authStep = 'email'; _authEmail = ''; renderAuthModal(); }
+function renderAuthModal(){
+  const root = document.getElementById('modal-root');
+  if (_authStep === 'email'){
+    root.innerHTML =
+      `<div class="overlay" onclick="if(event.target===this)closeModal()">
+        <div class="modal" role="dialog" aria-modal="true">
+          <div class="modal-head"><h3>Sign in</h3><button class="icon-btn" onclick="closeModal()">✕</button></div>
+          <div class="modal-body">
+            <p style="color:var(--text2)">We will email you a 6-digit code, no password.</p>
+            <div class="field">
+              <label>Email</label>
+              <input id="auth-email" type="email" placeholder="you@example.com" value="${escapeHtml(_authEmail)}" autocomplete="email">
+              <div class="err" id="auth-email-err"></div>
+            </div>
+          </div>
+          <div class="modal-foot"><span></span><button class="btn btn-primary" id="auth-send-btn" onclick="authSubmitEmail()">Send code</button></div>
+        </div>
+      </div>`;
+    const el = document.getElementById('auth-email'); if (el) el.focus();
+  } else {
+    root.innerHTML =
+      `<div class="overlay" onclick="if(event.target===this)closeModal()">
+        <div class="modal" role="dialog" aria-modal="true">
+          <div class="modal-head"><h3>Enter code</h3><button class="icon-btn" onclick="closeModal()">✕</button></div>
+          <div class="modal-body">
+            <p style="color:var(--text2)">Sent to <strong>${escapeHtml(_authEmail)}</strong>.</p>
+            <div class="field">
+              <label>6-digit code</label>
+              <input id="auth-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" autocomplete="one-time-code">
+              <div class="err" id="auth-code-err"></div>
+            </div>
+          </div>
+          <div class="modal-foot"><button class="btn" onclick="_authStep='email';renderAuthModal()">Back</button><button class="btn btn-primary" id="auth-verify-btn" onclick="authSubmitCode()">Verify</button></div>
+        </div>
+      </div>`;
+    const el = document.getElementById('auth-code'); if (el) el.focus();
+  }
+}
+async function authSubmitEmail(){
+  const el = document.getElementById('auth-email'), errEl = document.getElementById('auth-email-err'), btn = document.getElementById('auth-send-btn');
+  const email = el.value.trim();
+  errEl.textContent = ''; el.classList.remove('invalid');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ errEl.textContent = 'Enter a valid email'; el.classList.add('invalid'); return; }
+  btn.disabled = true; btn.textContent = 'Sending';
+  try{ await authRequestOtp(email); _authEmail = email; _authStep = 'code'; renderAuthModal(); }
+  catch(e){ errEl.textContent = e.message; el.classList.add('invalid'); }
+  finally{ btn.disabled = false; btn.textContent = 'Send code'; }
+}
+async function authSubmitCode(){
+  const el = document.getElementById('auth-code'), errEl = document.getElementById('auth-code-err'), btn = document.getElementById('auth-verify-btn');
+  const code = el.value.trim();
+  errEl.textContent = ''; el.classList.remove('invalid');
+  if (!/^\d{6}$/.test(code)){ errEl.textContent = 'Enter the 6-digit code'; el.classList.add('invalid'); return; }
+  btn.disabled = true; btn.textContent = 'Verifying';
+  try{ await authVerifyOtp(_authEmail, code); closeModal(); toast('Signed in'); renderAuthUI(); boot(); }
+  catch(e){ errEl.textContent = e.message; el.classList.add('invalid'); }
+  finally{ btn.disabled = false; btn.textContent = 'Verify'; }
+}
+
+/* ============================================================================
+   SUPABASE REST  (row shape: { id, data:{...}, updated_at })
+   Dormant while SB_URL is empty (the preview guard and sbConfigured() both
+   bail before any of this runs). See schema.sql's note on watchlist's named
+   columns vs this generic jsonb shape, a follow-up for M3.
+   ========================================================================== */
+async function sbBatchUpsert(table, items){
+  if (isLocalhostPreview()) return;          // preview guard
+  if (!items.length) return;
+  const rows = items.map(it => { const { id, _updatedAt, ...data } = it; return { id, data, updated_at:new Date().toISOString() }; });
+  const r = await sbRequest(SB_URL + '/rest/v1/' + table + '?on_conflict=id', {
+    method:'POST', extraHeaders:{ 'Prefer':'resolution=merge-duplicates' }, body:JSON.stringify(rows)
+  });
+  if (!r.ok) throw new Error('Upsert failed: ' + await r.text());
+}
+/* Ascending keyset pagination on (updated_at, id), 1000 rows per page. A plain
+   OFFSET/LIMIT page would double-count or skip a row that changes updated_at
+   mid-scan, keying off the last row's own (updated_at, id) does not. Loops
+   until a short page. One failed page fails the whole fetch, no partial
+   merges (loadData keeps whatever local data it already has). */
+async function sbFetchAll(table){
+  const rows = [];
+  let cursor = null;
+  for (;;){
+    let url = SB_URL + '/rest/v1/' + table + '?select=*&order=updated_at.asc,id.asc&limit=1000';
+    if (cursor) url += '&or=(updated_at.gt.' + encodeURIComponent(cursor.ts) + ',and(updated_at.eq.' + encodeURIComponent(cursor.ts) + ',id.gt.' + encodeURIComponent(cursor.id) + '))';
+    const r = await sbRequest(url, { method:'GET' });
+    if (!r.ok) throw new Error(await r.text());
+    const page = await r.json();
+    rows.push(...page);
+    if (page.length < 1000) break;
+    const last = page[page.length - 1];
+    cursor = { ts:last.updated_at, id:last.id };
+  }
+  return rows.map(row => ({ id:row.id, ...row.data, _updatedAt:row.updated_at }));
+}
+async function sbDelete(table, id){
+  if (isLocalhostPreview()) return true;     // preview guard
+  try{
+    const r = await sbRequest(SB_URL + '/rest/v1/' + table + '?id=eq.' + encodeURIComponent(id), { method:'DELETE' });
+    if (!r.ok) throw new Error(await r.text());
+    return true;
+  }catch(e){
+    setSync('error', e.message);
+    _queueDelete(table, id);                  // retry later so the row does not re-merge on next load
+    return false;
+  }
+}
+/* Failed cloud deletes are queued. Without this an orphan row sits in the cloud
+   and re-merges into local state on the next page load. */
+function _queueDelete(table, id){
+  try{ const l = JSON.parse(localStorage.getItem(PDEL_KEY) || '[]');
+    if (!l.some(x => x.table===table && x.id===id)){ l.push({ table, id, ts:Date.now() }); localStorage.setItem(PDEL_KEY, JSON.stringify(l)); }
+  }catch(e){}
+}
+async function flushPendingDeletes(){
+  if (isLocalhostPreview() || !sbConfigured()) return;
+  let l; try{ l = JSON.parse(localStorage.getItem(PDEL_KEY) || '[]'); }catch{ return; }
+  if (!Array.isArray(l) || !l.length) return;
+  const keep = [];
+  for (const it of l){
+    try{ const r = await sbRequest(SB_URL + '/rest/v1/' + it.table + '?id=eq.' + encodeURIComponent(it.id), { method:'DELETE' }); if (!r.ok) throw 0; }
+    catch(e){ if (Date.now() - (it.ts||0) < 7*864e5) keep.push(it); }   // give up after 7 days
+  }
+  try{ localStorage.setItem(PDEL_KEY, JSON.stringify(keep)); }catch{}
+}
+
+/* ============================================================================
+   SAVE, localStorage first (instant, the source of truth), cloud debounced.
+   Unused by any UI in M0-M2 (watchlist has no CRUD yet), kept ready for M3.
+   ========================================================================== */
+let _saveTimer = null;
+function bumpVersion(){ localStorage.setItem(VKEY + '_time', new Date().toISOString()); }
+function saveData(){
+  try{ localStorage.setItem(APP.storageKey, JSON.stringify(DB)); bumpVersion(); }
+  catch(e){ toast('Local storage is full. Changes will only reach the cloud. Avoid refreshing until synced.', true); }
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(_flushDirty, 1000);
+}
+
+async function _flushDirty(){
+  // Bail BEFORE the loop in a preview. If we let the skipped upserts read as
+  // success we would clear the dirty flags, and the next reload-merge would drop
+  // the local-only rows (silent data loss). Leaving them dirty preserves them.
+  if (isLocalhostPreview() || !sbConfigured()) return;
+  // Signed out with auth on: sync pauses visibly (setSync('signedout')), never a
+  // silent anon-key upsert that would 401 and paint the error state instead of
+  // the designed signed-out one. Dirty flags are untouched here, so the next
+  // successful sign-in flush picks them straight up.
+  if (authActive() && !isSignedIn()){ setSync('signedout'); return; }
+  const jobs = [];
+  for (const t of TABLES){
+    const ids = new Set(_dirty[t]);                 // snapshot NOW, before any await
+    const rows = DB[t].filter(r => ids.has(r.id));
+    if (rows.length) jobs.push({ t, ids, rows });
+  }
+  if (!jobs.length) return;
+  setSync('saving');
+  let err = false;
+  for (const { t, ids, rows } of jobs){
+    try{
+      for (let i=0; i<rows.length; i+=200) await sbBatchUpsert(t, rows.slice(i, i+200));  // chunk for body-size limits
+      ids.forEach(id => _dirty[t].delete(id));      // clear only what we actually uploaded
+    }catch(e){ err = true; setSync('error', e.message); }  // leave ids dirty so the next save retries
+  }
+  _persistDirty();
+  if (!err) setSync('ok');
+  flushPendingDeletes().catch(()=>{});
+}
+
+/* ============================================================================
+   LOAD, localStorage first, then reconcile against the cloud by TIMESTAMP
+   (never by record count, or a deletion looks like data loss and gets reverted).
+   ========================================================================== */
+function mergeTable(cloudRows, localRows, dirtySet){
+  // Cloud is the base, but any row still dirty locally (edited, not yet synced)
+  // wins, so an in-flight edit is never clobbered by the cloud fetch.
+  if (!dirtySet || dirtySet.size === 0) return cloudRows;
+  const byId = new Map(cloudRows.map(r => [r.id, r]));
+  for (const id of dirtySet){ const lr = localRows.find(r => r.id === id); if (lr) byId.set(id, lr); }
+  return [...byId.values()];
+}
+
+async function loadData(){
+  let local = null;
+  try{ local = JSON.parse(localStorage.getItem(APP.storageKey) || 'null'); }catch(e){}
+  if (local) TABLES.forEach(t => DB[t] = local[t] || []);
+
+  if (isLocalhostPreview()){ setSync('preview'); _cloudReachable = true; return; }
+  if (!sbConfigured()){ setSync('idle'); _cloudReachable = true; return; }
+  if (authActive() && !isSignedIn()){ setSync('signedout'); _cloudReachable = true; return; }   // paused, not broken: local stays fully usable
+
+  // Fetch every table in one Promise.all. Any single table's failure rejects
+  // the whole thing, so cloud is never populated for any table and every
+  // table's local data is left exactly as loaded above, never a partial cloud
+  // merge for some tables and stale local for others.
+  let cloud = {}; _cloudReachable = true;
+  try{
+    const res = await Promise.all(TABLES.map(t => sbFetchAll(t)));
+    TABLES.forEach((t,i) => cloud[t] = res[i]);
+  }catch(e){
+    _cloudReachable = false; setSync('error', e.message);
+    return;   // keep whatever local we have
+  }
+
+  const hasCloud = TABLES.some(t => (cloud[t] || []).length);
+  if (!hasCloud){ setSync('ok'); return; }   // cloud empty: keep local (may be a fresh start)
+
+  let cloudMs = 0;
+  TABLES.forEach(t => (cloud[t] || []).forEach(r => { const m = +new Date(r._updatedAt || 0); if (m > cloudMs) cloudMs = m; }));
+  const localMs = +new Date(localStorage.getItem(VKEY + '_time') || 0) || 0;
+
+  if (local && localMs >= cloudMs){
+    setSync('ok'); return;   // local write is newer or equal: local is authoritative
+  }
+  // Cloud is newer (or there is no local): take cloud, but keep any dirty local rows.
+  TABLES.forEach(t => { DB[t] = mergeTable(cloud[t] || [], DB[t] || [], _dirty[t]); });
+  try{ localStorage.setItem(APP.storageKey, JSON.stringify(DB)); bumpVersion(); }catch(e){}
+  setSync('ok');
+}
+
+const uid = KjrFmt.uid;             // shared helper, see lib/kjr-format.js, ready for M3's watchlist rows
+const escapeHtml = KjrFmt.esc;      // shared helper, see lib/kjr-format.js
+
+/* ============================================================================
+   MOCK MARKET-DATA ENGINE (M1)
+   Deterministic: a fixed seed produces the exact same prices and intraday
+   series on every reload (proven by the acceptance test: reload twice,
+   compare a printed value). This is a stand-in for a real feed, not a live
+   one. Do not swap in Math.random() here, it would break reload-stability.
+   Real-world tickers/names, no crypto. Indices in the thousands, FX pairs
+   near their real-world level, commodities near their real-world price.
+   ========================================================================== */
+const MARKET_SEED = 20260728;   // fixed. Change only if the instrument shape below changes.
+
+// mulberry32: small, fast, deterministic PRNG. Same seed -> same sequence,
+// every time, in every browser (no engine-specific Math.random() quirks).
+function mulberry32(seed){
+  let a = seed >>> 0;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// base: a plausible current level for the instrument. vol: a per-tick
+// volatility factor, bigger = choppier walk (natural gas > FX, for instance).
+const INSTRUMENTS = [
+  // Indices (9)
+  { symbol:'SPX',  name:'S&P 500',                assetClass:'indices', base:5502,  vol:0.009 },
+  { symbol:'DJI',  name:'Dow Jones Industrial',    assetClass:'indices', base:40211, vol:0.008 },
+  { symbol:'NDX',  name:'Nasdaq 100',              assetClass:'indices', base:19587, vol:0.011 },
+  { symbol:'UKX',  name:'FTSE 100',                assetClass:'indices', base:8203,  vol:0.007 },
+  { symbol:'DAX',  name:'DAX',                     assetClass:'indices', base:18512, vol:0.008 },
+  { symbol:'N225', name:'Nikkei 225',               assetClass:'indices', base:39021, vol:0.010 },
+  { symbol:'HSI',  name:'Hang Seng',                assetClass:'indices', base:17845, vol:0.013 },
+  { symbol:'STI',  name:'Straits Times Index',      assetClass:'indices', base:3402,  vol:0.006 },
+  { symbol:'AS51', name:'ASX 200',                  assetClass:'indices', base:7911,  vol:0.007 },
+  // Forex (9)
+  { symbol:'EURUSD', name:'Euro / US Dollar',              assetClass:'forex', base:1.085, vol:0.004 },
+  { symbol:'GBPUSD', name:'British Pound / US Dollar',      assetClass:'forex', base:1.271, vol:0.005 },
+  { symbol:'USDJPY', name:'US Dollar / Japanese Yen',       assetClass:'forex', base:155.4, vol:0.005 },
+  { symbol:'USDCHF', name:'US Dollar / Swiss Franc',        assetClass:'forex', base:0.897, vol:0.004 },
+  { symbol:'AUDUSD', name:'Australian Dollar / US Dollar',  assetClass:'forex', base:0.662, vol:0.006 },
+  { symbol:'USDCAD', name:'US Dollar / Canadian Dollar',    assetClass:'forex', base:1.368, vol:0.004 },
+  { symbol:'NZDUSD', name:'NZ Dollar / US Dollar',          assetClass:'forex', base:0.610, vol:0.006 },
+  { symbol:'USDSGD', name:'US Dollar / Singapore Dollar',   assetClass:'forex', base:1.343, vol:0.003 },
+  { symbol:'EURGBP', name:'Euro / British Pound',           assetClass:'forex', base:0.854, vol:0.004 },
+  // Commodities (7)
+  { symbol:'XAUUSD', name:'Gold',           assetClass:'commodities', base:2351.4, vol:0.009 },
+  { symbol:'XAGUSD', name:'Silver',         assetClass:'commodities', base:29.38,  vol:0.014 },
+  { symbol:'WTI',    name:'Crude Oil WTI',  assetClass:'commodities', base:78.21,  vol:0.016 },
+  { symbol:'BRENT',  name:'Brent Crude',    assetClass:'commodities', base:82.47,  vol:0.015 },
+  { symbol:'NATGAS', name:'Natural Gas',    assetClass:'commodities', base:2.652,  vol:0.030 },
+  { symbol:'COPPER', name:'Copper',         assetClass:'commodities', base:4.183,  vol:0.012 },
+  { symbol:'XPTUSD', name:'Platinum',       assetClass:'commodities', base:984.6,  vol:0.013 },
+];
+
+const SERIES_POINTS = 78;   // ~6.5h trading day in 5-minute bars, comfortably over the 60-point minimum
+
+// One instrument's full mock record: a seeded random walk from a starting
+// previous-close through SERIES_POINTS intraday ticks. last/dayHigh/dayLow
+// all come out of the SAME walk, so they can never disagree with the series.
+function genInstrument(cfg, rng){
+  const prevClose = cfg.base * (1 + (rng() - 0.5) * cfg.vol * 0.6);
+  const series = [prevClose];
+  let dayHigh = prevClose, dayLow = prevClose;
+  for (let i = 1; i < SERIES_POINTS; i++){
+    const step = (rng() - 0.5) * 2 * cfg.vol * cfg.base / Math.sqrt(SERIES_POINTS) * 3;
+    let next = series[i - 1] + step;
+    if (next <= 0) next = series[i - 1] * 0.999;   // guard: no instrument goes non-positive
+    series.push(next);
+    if (next > dayHigh) dayHigh = next;
+    if (next < dayLow) dayLow = next;
+  }
+  return {
+    symbol: cfg.symbol, name: cfg.name, assetClass: cfg.assetClass,
+    last: series[series.length - 1], prevClose, dayHigh, dayLow,
+    volatility: cfg.vol, series,
+  };
+}
+
+// One rng, iterated over INSTRUMENTS in this fixed array order: same seed +
+// same order = the exact same output every call, which is what makes reload
+// determinism hold.
+function generateMarketData(){
+  const rng = mulberry32(MARKET_SEED);
+  return INSTRUMENTS.map(cfg => genInstrument(cfg, rng));
+}
+
+/* ============================================================================
+   DERIVED VALUES, one computing function each, every view below calls these
+   rather than reading a stored copy, so a value can never go stale (see
+   CLAUDE.md and the packet invariants).
+   ========================================================================== */
+function changeAbs(instr){ return instr.last - instr.prevClose; }
+function changePct(instr){ return instr.prevClose ? (changeAbs(instr) / instr.prevClose) * 100 : 0; }
+function direction(instr){ const c = changeAbs(instr); return c > 0 ? 'up' : c < 0 ? 'down' : 'flat'; }
+// Where `last` sits within today's [dayLow, dayHigh] range, 0 = at the low, 1 = at the high.
+function dayRangePos(instr){
+  const range = instr.dayHigh - instr.dayLow;
+  return range > 0 ? (instr.last - instr.dayLow) / range : 0.5;
+}
+function priceDecimals(instr){
+  if (instr.assetClass === 'forex') return /JPY/.test(instr.symbol) ? 3 : 4;
+  if (instr.assetClass === 'commodities') return instr.last < 10 ? 3 : 2;
+  return 2;
+}
+function formatPrice(instr){
+  const dp = priceDecimals(instr);
+  return instr.last.toLocaleString('en-GB', { minimumFractionDigits:dp, maximumFractionDigits:dp });
+}
+
+/* ============================================================================
+   RENDER  (M2, overview grid)
+   ========================================================================== */
+const ASSET_CLASSES = [
+  { key:'indices',     label:'Indices' },
+  { key:'forex',       label:'Forex' },
+  { key:'commodities', label:'Commodities' },
+];
+
+let _market = [];
+let _genFailed = false;
+
+function sparklinePoints(series, w, h, pad){
+  const min = Math.min(...series), max = Math.max(...series);
+  const range = (max - min) || 1;
+  const step = series.length > 1 ? (w - pad * 2) / (series.length - 1) : 0;
+  return series.map((v, i) => {
+    const x = pad + i * step;
+    const y = pad + (h - pad * 2) * (1 - (v - min) / range);
+    return x.toFixed(2) + ',' + y.toFixed(2);
+  }).join(' ');
+}
+function sparklineSvg(instr, dir){
+  const w = 100, h = 32, pad = 2;
+  const pts = sparklinePoints(instr.series, w, h, pad);
+  return `<svg class="instr-spark ${dir}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`;
+}
+
+// Movement is never colour alone: an arrow glyph, an explicit text sign, AND
+// a colour class always travel together.
+function renderInstrumentCard(instr){
+  const dir = direction(instr);
+  const dp = priceDecimals(instr);
+  const arrow = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '–';
+  const sign = dir === 'up' ? '+' : dir === 'down' ? '-' : '';
+  const absVal = Math.abs(changeAbs(instr)).toFixed(dp);
+  const pctVal = Math.abs(changePct(instr)).toFixed(2);
+  return `<div class="instr-card">
+    <div class="instr-top">
+      <span class="instr-sym">${escapeHtml(instr.symbol)}</span>
+      <span class="instr-name">${escapeHtml(instr.name)}</span>
+    </div>
+    <div class="instr-price">${formatPrice(instr)}</div>
+    <div class="instr-change ${dir}">
+      <span aria-hidden="true">${arrow}</span>
+      <span>${sign}${absVal}</span>
+      <span>(${sign}${pctVal}%)</span>
+    </div>
+    <div class="instr-range"><span>L ${instr.dayLow.toFixed(dp)}</span><span>H ${instr.dayHigh.toFixed(dp)}</span></div>
+    ${sparklineSvg(instr, dir)}
+  </div>`;
+}
+
+function renderDashboard(){
+  const loading = document.getElementById('loading');
+  const errEl   = document.getElementById('error');
+  const emptyEl = document.getElementById('empty');
+  const dash    = document.getElementById('dashboard');
+  loading.classList.add('hidden');
+
+  const broken = _genFailed || !_cloudReachable;
+  errEl.classList.toggle('hidden', !broken);
+  if (broken){ dash.classList.add('hidden'); emptyEl.classList.add('hidden'); return; }
+
+  const isEmpty = _market.length === 0;
+  emptyEl.classList.toggle('hidden', !isEmpty);
+  dash.classList.toggle('hidden', isEmpty);
+  if (isEmpty) return;
+
+  ASSET_CLASSES.forEach(ac => {
+    const rows = _market.filter(m => m.assetClass === ac.key);
+    const grid = document.getElementById('grid-' + ac.key);
+    const count = document.getElementById('count-' + ac.key);
+    if (count) count.textContent = rows.length + (rows.length === 1 ? ' instrument' : ' instruments');
+    if (grid) grid.innerHTML = rows.map(renderInstrumentCard).join('');
+  });
+}
+
+/* ============================================================================
+   THEME  (default to system preference, then remember the user's choice)
+   ========================================================================== */
+function applyTheme(t){
+  document.documentElement.classList.toggle('light', t === 'light');
+  document.querySelector('meta[name=theme-color]').setAttribute('content', t === 'light' ? '#f5f4f9' : '#0f0f17');
+}
+function toggleTheme(){
+  const next = document.documentElement.classList.contains('light') ? 'dark' : 'light';
+  localStorage.setItem(APP.storageKey + '_theme', next);
+  applyTheme(next);
+}
+(function initTheme(){
+  const saved = localStorage.getItem(APP.storageKey + '_theme');
+  applyTheme(saved || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'));
+})();
+
+/* ============================================================================
+   MODAL close helper (mount point for M3, unused today)
+   ========================================================================== */
+function closeModal(){ document.getElementById('modal-root').innerHTML = ''; }
+
+/* ============================================================================
+   TOAST
+   ========================================================================== */
+function toast(msg, isErr){
+  const el = document.createElement('div');
+  el.className = 'toast' + (isErr ? ' err' : '');
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 300); }, isErr ? 5000 : 2500);
+}
+
+/* ============================================================================
+   BOOT
+   ========================================================================== */
+async function boot(){
+  document.getElementById('loading').classList.remove('hidden');
+  await loadData();
+  _genFailed = false;
+  try{ _market = generateMarketData(); }
+  catch(e){ console.error('Market data generation failed:', e); _market = []; _genFailed = true; }
+  renderDashboard();
+}
+function init(){
+  document.getElementById('app-name').textContent = APP.name.split(' ')[0] || 'Kujira';
+  document.getElementById('ver').textContent = APP.version;
+  _loadDirty();
+  if (authActive()) _auth = _loadAuth();
+  renderAuthUI();
+  boot();
+}
+init();
+
+/* Service worker (offline shell). Skipped on file:// where it cannot register. */
+if ('serviceWorker' in navigator && location.protocol !== 'file:'){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
