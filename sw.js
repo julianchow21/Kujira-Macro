@@ -1,8 +1,8 @@
 /* Offline app shell. Bump CACHE on every ship so clients pull the new build.
    SHELL lists the exact request URLs index.html makes, including query
    strings, so every precache entry byte-matches a real request. */
-const CACHE = 'kjr-macro-v1.0';
-const SHELL = ['./', './index.html', './whale-icon-192.png', './whale-icon-512.png', './whale-icon-maskable-512.png', './apple-touch-icon.png', './manifest.webmanifest', './tokens.css?v=1.0', './lib/lexend.woff2', './lib/kjr-format.js?v=1.0'];
+const CACHE = 'kjr-macro-v1.1';
+const SHELL = ['./', './index.html', './whale-icon-192.png', './whale-icon-512.png', './whale-icon-maskable-512.png', './apple-touch-icon.png', './manifest.webmanifest', './tokens.css?v=1.1', './lib/lexend.woff2', './lib/kjr-format.js?v=1.1'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

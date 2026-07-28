@@ -1,27 +1,22 @@
 -- ===========================================================================
 -- Macro, Supabase schema
 -- Run this in the Supabase SQL editor once a project exists (none does yet,
--- M0 ships with an empty Supabase URL in index.html, fully local). One block
--- per table, RLS is ON by default, pick ONE policy option.
+-- index.html ships with an empty Supabase URL, fully local). One block per
+-- table, RLS is ON by default, pick ONE policy option.
 --
--- NOTE for whoever builds M3 (watchlist CRUD): this table uses named typed
--- columns (symbol, label, asset_class, sort_order), not the starter's generic
--- {id, data jsonb, updated_at} row shape. The starter's client-side sync
--- helpers (sbBatchUpsert/sbFetchAll in index.html) currently assume the
--- generic jsonb shape for every table in TABLES. M3 must either widen those
--- helpers to handle named columns for this table, or fold watchlist's fields
--- back into a jsonb data column to match the existing sync code unchanged.
--- Not resolved here, out of scope for M0-M2 (sync is inert, no Supabase URL).
+-- Row shape: generic {id, user_id, data jsonb, updated_at}, matching the
+-- starter's sbBatchUpsert/sbFetchAll in index.html unchanged. Every
+-- per-instrument field (symbol, label, asset_class, sort_order) lives inside
+-- the data jsonb column rather than as a named typed column. This keeps the
+-- proven generic sync layer untouched, no per-table client code path. RLS
+-- still needs user_id as a real column (a policy cannot filter cheaply on a
+-- value buried in jsonb), so user_id stays outside data.
 -- ===========================================================================
 
 create table if not exists watchlist (
   id          text primary key,
   user_id     uuid        default auth.uid(),   -- single-user seam, nullable for now
-  symbol      text        not null,
-  label       text,
-  asset_class text,
-  sort_order  int,
-  created_at  timestamptz not null default now(),
+  data        jsonb       not null,              -- symbol, label, asset_class, sort_order
   updated_at  timestamptz not null default now()
 );
 

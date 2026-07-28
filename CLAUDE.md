@@ -11,9 +11,9 @@ This app is "Kujira Macro", referred to as "Macro" throughout.
 - M0 Scaffold, done. Config, schema, git init
 - M1 Mock market-data engine, done. Seeded deterministic generator
 - M2 Dashboard shell plus overview grid, done. Dark/light, sparklines, responsive
-- M3 Watchlist CRUD, not built
-- M4 Instrument detail drawer, not built
-- M5 Polish pass, not built
+- M3 Watchlist CRUD, done. Add/remove by symbol, validated, undo toast, designed empty state
+- M4 Instrument detail drawer, done. Larger chart, day-range bar, volatility, key stats
+- M5 Polish pass, done. Error/empty states, both themes, mobile golden path, badge bumped
 
 ## Architecture
 
@@ -23,9 +23,11 @@ Single-file SPA. All CSS, JS, and HTML live in `index.html`. Shared colour, type
 
 Scaffolded from the Kujira web-app starter, sync layer inert (no Supabase project exists yet).
 
-- `DB.watchlist`, empty today, wired through `TABLES` so the starter's dirty-tracking, save, load and merge machinery already treats it as a real table
-- `saveData()` writes to localStorage first, cloud flush is a no-op while `SB_DIRECT_URL` is empty
+- `DB.watchlist` rows are `{ id, symbol, label, assetClass, sortOrder }`, added via `addToWatchlist()` and removed via `removeFromWatchlist()`, each write goes through `markDirty('watchlist', id)` then `saveData()`
+- `saveData()` writes to localStorage first, cloud flush is a no-op while `SB_DIRECT_URL` is empty. The write path is real, only the network call is inert
+- Prices are never stored on a watchlist row. `renderWatchlistRow()` looks the row's symbol up in `_market` at render time, so a watchlist entry can never show a stale price
 - The dashboard itself (the mock instruments shown on screen) is NOT part of `DB`, it is generated fresh on every boot by the mock engine below, nothing about it persists or syncs
+- Removing a row is reversible: a toast with an Undo action holds the removed row and its original array index for 6 seconds (ASSUMED over a confirm dialog, see M3 packet report)
 
 ### Mock market-data engine (M1)
 
@@ -49,11 +51,14 @@ Never swap in `Math.random()` here, it breaks reload determinism (the M2 accepta
 
 Movement direction is never colour alone: every up/down/flat state pairs an arrow glyph, an explicit `+`/`-` text sign, and a colour class (`.instr-change.up/.down/.flat`).
 
-## Known follow-ups (for whoever builds M3+)
+## Data contract decision (M3)
 
-- `schema.sql`'s `watchlist` table uses named typed columns (symbol, label, asset_class, sort_order) per the packet's data contract, not the starter's generic `{id, data jsonb, updated_at}` row shape. The client's `sbBatchUpsert`/`sbFetchAll` in `index.html` still assume the generic shape for every table in `TABLES`. Reconcile one way or the other before wiring real sync
-- No Supabase project exists yet, `SB_DIRECT_URL` stays empty until one is created
-- `kjr-calendar.js` and `kjr-sortable.js` are vendored in `lib/` (matching the starter's standard set) but not `<script src>`-loaded, nothing in M0-M2 needs them yet
+`schema.sql`'s `watchlist` table is the starter's generic `{id, user_id, data jsonb, updated_at}` shape, matching `sbBatchUpsert`/`sbFetchAll` in `index.html` unchanged. The per-instrument fields (`symbol`, `label`, `asset_class`, `sort_order`) live inside `data`, not as named columns, so the proven generic sync layer never needs a per-table code path. RLS still keys on `user_id` as a real column outside `data`.
+
+## Known follow-ups
+
+- No Supabase project exists yet, `SB_DIRECT_URL` stays empty until one is created, so sync stays inert and untested end to end
+- `kjr-calendar.js` and `kjr-sortable.js` are vendored in `lib/` (matching the starter's standard set) but not `<script src>`-loaded, nothing built so far needs them
 
 ## Files
 
