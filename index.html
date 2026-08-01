@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="whale-icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="tokens.css?v=1.1">
+<link rel="stylesheet" href="tokens.css?v=1.2">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font);font-weight:360;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5;transition:background var(--dur) ease-out,color var(--dur) ease-out}
@@ -61,6 +61,7 @@ input.invalid,select.invalid{border-color:var(--red)}
 .instr-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0;position:relative;cursor:pointer;transition:border-color var(--dur) ease-out}
 .instr-card:hover{border-color:var(--border2)}
 .instr-remove{position:absolute;top:8px;right:8px;width:26px;height:26px;font-size:12px}
+.wl-card .instr-top{padding-right:24px} /* clear the absolute ✕ so the name never slides under it */
 .instr-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;min-width:0}
 .instr-sym{font-weight:640;font-size:13px;letter-spacing:-.01em;flex-shrink:0}
 .instr-name{font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
@@ -218,7 +219,7 @@ input.invalid,select.invalid{border-color:var(--red)}
      Configure them, do not fork. kjr-calendar.js and kjr-sortable.js are
      vendored in lib/ too (per the starter's standard set) but not loaded
      here, M0-M2 has no date or drag-reorder UI yet. -->
-<script src="lib/kjr-format.js?v=1.1"></script>
+<script src="lib/kjr-format.js?v=1.2"></script>
 
 <script>
 /* ============================================================================
@@ -228,7 +229,7 @@ input.invalid,select.invalid{border-color:var(--red)}
 const APP = {
   name: 'Macro',
   storageKey: 'kjr-macro',     // localStorage key (bump the suffix on a breaking schema change)
-  version: 'v1.1 (28 Jul)',    // build badge, bump on every ship
+  version: 'v1.2 (1 Aug)',    // build badge, bump on every ship
 };
 
 // Every table the app owns. The whole sync layer is driven by this list, so
@@ -803,7 +804,7 @@ function renderInstrumentCard(instr, opts){
   const removeBtn = opts.removable
     ? `<button class="icon-btn instr-remove" title="Remove from watchlist" aria-label="Remove ${escapeHtml(instr.symbol)} from watchlist" onclick="event.stopPropagation();removeFromWatchlist('${opts.watchlistId}')">✕</button>`
     : '';
-  return `<div class="instr-card" tabindex="0" role="button" aria-label="${escapeHtml(instr.symbol)}, ${escapeHtml(instr.name)}, view details" onclick="openDetailDrawer('${instr.symbol}', this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openDetailDrawer('${instr.symbol}', this)}">
+  return `<div class="instr-card${opts.removable ? ' wl-card' : ''}" tabindex="0" role="button" aria-label="${escapeHtml(instr.symbol)}, ${escapeHtml(instr.name)}, view details" onclick="openDetailDrawer('${instr.symbol}', this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openDetailDrawer('${instr.symbol}', this)}">
     ${removeBtn}
     <div class="instr-top">
       <span class="instr-sym">${escapeHtml(instr.symbol)}</span>

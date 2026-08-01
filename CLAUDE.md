@@ -80,4 +80,4 @@ No project-local `.claude/launch.json`, that file is gitignored per-project and 
 
 ## Hosting
 
-Not deployed. No Supabase project, no remote, no push yet, all local.
+Repo: `github.com/julianchow21/Kujira-Macro`, pushed to `main` (repo created 01/08/2026). Not deployed anywhere, no live URL. No Supabase project yet, sync stays inert until one exists (see schema.sql).
