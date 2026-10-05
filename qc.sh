@@ -1,6 +1,6 @@
 #!/bin/bash
 # Static QC for Macro. Run from the repo root: ./qc.sh (exit 0 = pass)
-# Adapted from the web-app-starter's qc.sh: this project has no workbench.html,
+# Adapted from App Starter's qc.sh: this project has no workbench.html,
 # so every workbench.html check below was dropped, index.html only.
 #
 # Checks:
